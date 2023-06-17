@@ -85,8 +85,10 @@ void destroyQueue(void){
 
 void enqueue(void *item){
     mtx_lock(&mtx);
-    cv *curr_cv_q_head;
-    Node *new_Node;
+    cv *tmp_cv_q_head;
+    //cnd_t tmp_cond;
+    //Node *new_Node;
+
     queue->size++;
     //if no thread is waiting to dequeue
     if (cv_q->head == NULL){
@@ -96,26 +98,23 @@ void enqueue(void *item){
             queue->head->data = item;
             queue->head->next = NULL;
             queue->tail = queue->head;
-            new_Node = queue->head;
         }
         else{
-            new_Node = (Node *)malloc(sizeof(Node));
-            new_Node->data = item;
-            new_Node->next = NULL;
-            queue->tail->next = new_Node;
+            queue->tail->next = (Node *)malloc(sizeof(Node));
             queue->tail = queue->tail->next;
+            queue->tail->data = item;
+            queue->tail->next = NULL;
         }
     }
 
     // if cv_q is not null -> connect new_Node to the first cv on cv_q
     else{
-        new_Node = (Node *)malloc(sizeof(Node));
-        new_Node->data = item;
-        new_Node->next = NULL;
-        cv_q->head->Node_to_dq = new_Node;
-        curr_cv_q_head = cv_q->head;
+        cv_q->head->Node_to_dq = (Node *)malloc(sizeof(Node));
+        cv_q->head->Node_to_dq->data = item;
+        cv_q->head->Node_to_dq->next = NULL;
+        tmp_cv_q_head = cv_q->head;
         cv_q->head = cv_q->head->next;
-        cnd_signal(&(curr_cv_q_head->cond));
+        cnd_signal(&(tmp_cv_q_head->cond));
     }
     mtx_unlock(&mtx);
 }
@@ -127,7 +126,7 @@ void *dequeue(void){
     void *item;
     Node *tmp_Node;
 
-    
+    cnd_init(&cond);
     //if queue is not empty -> dequeue its first item
     if (queue->head != NULL){
         item = queue->head->data;
@@ -139,20 +138,26 @@ void *dequeue(void){
     }
     //if queue is empty -> put the thread to sleep
     else{
-        //init new_cv 
-        cnd_init(&cond);
-        new_cv = (cv *)malloc(sizeof(cv));
-        new_cv->cond = cond;
-        new_cv->Node_to_dq = NULL;
-        new_cv->next = NULL;
+        //new_cv = (cv *)malloc(sizeof(cv));
+        //new_cv->cond = cond;
+        //new_cv->Node_to_dq = NULL;
+        //new_cv->next = NULL;
 
         if (cv_q->head == NULL){
-            cv_q->head = new_cv;
-            cv_q->tail = new_cv;
+            cv_q->head = (cv *)malloc(sizeof(cv));
+            cv_q->head->cond = cond;
+            cv_q->head->next = NULL;
+            cv_q->head->Node_to_dq = NULL;
+            cv_q->tail = cv_q->head;
+            new_cv = cv_q->tail;
         }
         else{
-        cv_q->tail->next = new_cv;
-        cv_q->tail = cv_q->tail->next;
+            cv_q->tail->next = (cv *)malloc(sizeof(cv));
+            cv_q->tail = cv_q->tail->next;
+            cv_q->tail->cond = cond;
+            cv_q->tail->next = NULL;
+            cv_q->tail->Node_to_dq = NULL;
+            new_cv = cv_q->tail;
         }
         cv_q->waiting++;
         cnd_wait(&cond, &mtx); //new_cv is now waiting
@@ -164,7 +169,7 @@ void *dequeue(void){
             queue->size--;
         }
         */
-        cv_q->head = cv_q->head->next;
+        //cv_q->head = cv_q->head->next;
         free(new_cv);
     }
     cnd_destroy(&cond);
